@@ -1,0 +1,45 @@
+Metadata-Version: 2.1
+Name: chparse
+Version: 0.0.3
+Summary: Parse Clone Hero charts with ease!.
+Home-page: https://github.com/Kenny2github/chparse
+Author: Ken Hilton
+License: GPLv3+
+Keywords: file format parser
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Text Processing :: Markup
+Classifier: License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Requires-Python: >=3.6
+
+chparse - Parse Clone Hero charts with ease!
+
+Installation
+============
+
+Install the stable build via::
+
+    pip install chparse
+
+Or install the latest development (unstable) build via::
+
+    git clone https://github.com/Kenny2github/chparse.git
+    cd chparse
+    python setup.py install
+
+Example Usage
+=============
+
+Assuming your .chart file is named "notes.chart"...
+
+.. code-block:: python
+
+    >>> import chparse
+    >>> with open('notes.chart') as chartfile:
+    ...     chart = chparse.load(chartfile)
+    >>> chart.instruments[chparse.EXPERT][chparse.GUITAR][0]
+    <Note: 0 = N 3 0 (<Flags.NONE: 0>)>
+

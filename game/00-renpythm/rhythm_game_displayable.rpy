@@ -1,72 +1,14 @@
-# Note: the terms onset and beatmap are used interchangeably in this script
+define IMG_UP = "images/renpy-rhythm/up.png"
+define IMG_LEFT = "images/renpy-rhythm/left.png"
+define IMG_RIGHT = "images/renpy-rhythm/right.png"
+define IMG_DOWN = "images/renpy-rhythm/down.png"
 
-define THIS_PATH = '00-renpythm/'
+define CHANNEL_RHYTHM_GAME = "rhythm_music"
 
-# XXX: using os.path.join here will actually break because Ren'Py somehow doesn't recognize it
-define IMG_DIR = 'images/'
-define IMG_UP = THIS_PATH + IMG_DIR + 'up.png'
-define IMG_LEFT = THIS_PATH + IMG_DIR + 'left.png'
-define IMG_RIGHT = THIS_PATH + IMG_DIR + 'right.png'
-define IMG_DOWN = THIS_PATH + IMG_DIR + 'down.png'
-
-# music channel for renpy.play
-define CHANNEL_RHYTHM_GAME = 'CHANNEL_RHYTHM_GAME'
-
-# scores for Good and Perfect hits
-define SCORE_GOOD = 60
-define SCORE_PERFECT = 100
-
-label rhythm_game_entry_label:
-    $ selected_song = renpy.call_screen(_screen_name='select_song_screen', songs=rhythm_game_songs)
-    # call screen select_song_screen(rhythm_game_songs)
-    # $ selected_song = _return
-
-    # the select_song_screen will show at the bottom of this loop
-    # if the player exits, selected_song becomes None and we exit out of the loop
-    while isinstance(selected_song, Song):
-
-        $ rhythm_game_displayable = RhythmGameDisplayable(selected_song)
-        
-        # avoid rolling back and losing game state
-        $ renpy.block_rollback()
-
-        # disable Esc key menu to prevent the player from saving the game
-        $ _game_menu_screen = None
-
-        $ renpy.notify('Use the arrow keys on your keyboard to hit the notes as they reach the end of the tracks. Good luck!')
-        # call screen rhythm_game(rhythm_game_displayable)
-        # $ new_score = _return
-        $ new_score = renpy.call_screen(_screen_name='rhythm_game', rhythm_game_displayable=rhythm_game_displayable)
-
-        # XXX: old_percent is not used, but doing `old_score, _` causes pickling error
-        $ old_score, old_percent = persistent.rhythm_game_high_scores[selected_song.name]
-        if new_score > old_score:
-
-            $ renpy.notify('New high score!')
-            # compute new percent
-            $ new_percent = selected_song.compute_percent(new_score)
-            $ persistent.rhythm_game_high_scores[selected_song.name] = (new_score, new_percent)
-
-        $ del rhythm_game_displayable
-
-        # re-enable the Esc key menu
-        $ _game_menu_screen = 'save'
-
-        # avoid rolling back and entering the game again
-        $ renpy.block_rollback()
-
-        # restore rollback from this point on
-        $ renpy.checkpoint()
-
-        # show high score only, not playable
-        $ selected_song = renpy.call_screen(_screen_name='select_song_screen', songs=rhythm_game_songs)
-        # $ selected_song = _return
-
-    return
+define SCORE_GOOD = 6
+define SCORE_PERFECT = 10
 
 screen select_song_screen(songs):
-
-    # prevent the player from clicking on the textbox to proceed with the story without closing this screen first
     modal True
 
     frame:
@@ -81,16 +23,14 @@ screen select_song_screen(songs):
             label 'Click on a song to play' xalign 0.5
 
             vbox spacing 10:
-                hbox spacing 160:
+                grid 3 len(songs) + 1:
+                    xspacing 100
                     label 'Song Name'
                     label 'Highest Score'
                     label '% Perfect Hits'
-
-                grid 3 len(songs):
-                    xspacing 100
                     for song in songs:
                         textbutton song.name action [
-                        Return(song)
+                            Return(song)
                         ]
                         $ highest_score, highest_percent = persistent.rhythm_game_high_scores[song.name]
                         text str(highest_score)
@@ -101,15 +41,15 @@ screen select_song_screen(songs):
                 action Return(None)
 
 screen rhythm_game(rhythm_game_displayable):
+    zorder 100
 
     zorder 100 # always on top, covering textbox, quick_menu
-
-    # disable the arrow keys from activating the Quit button
-    # https://www.renpy.org/doc/html/screens.html#key
-    key 'K_LEFT' action NullAction()
-    key 'K_UP' action NullAction()
-    key 'K_DOWN' action NullAction()
-    key 'K_RIGHT' action NullAction()
+    # disable key handling for game keys
+    key 'K_1' action NullAction()
+    key 'K_2' action NullAction()
+    key 'K_3' action NullAction()
+    key 'K_4' action NullAction()
+    key 'K_5' action NullAction()
 
     add Solid('#000')
     add rhythm_game_displayable
@@ -119,77 +59,117 @@ screen rhythm_game(rhythm_game_displayable):
         ypos 50
         spacing 20
 
-        textbutton 'Quit' action [
-        Confirm('Would you like to quit the rhythm game?',
-            yes=[
-            Stop(CHANNEL_RHYTHM_GAME), # stop the music on this channel
-            Return(rhythm_game_displayable.score)
-            ])]:
-            # force the button text to be white when hovered
+        textbutton 'Quit' action [Confirm('Would you like to quit?', yes=[Stop(CHANNEL_RHYTHM_GAME), Return(rhythm_game_displayable.score)])]:
             text_hover_color '#fff'
 
-        # can also use has_music_started so this won't show during the silence
         showif rhythm_game_displayable.has_game_started:
-            text 'Score: ' + str(rhythm_game_displayable.score):
+            text 'Score: [rhythm_game_displayable.score]':
                 color '#fff'
                 size 40
 
-    # use has_music_started, do not use has_game_started, b/c we are still in silence
     showif rhythm_game_displayable.has_music_started:
         bar:
             xalign 0.5
             ypos 20
             xsize 740
-            value AudioPositionValue(channel=CHANNEL_RHYTHM_GAME)
+            value CustomAudioPositionValue(channel=CHANNEL_RHYTHM_GAME, duration=rhythm_game_displayable.song.duration)
 
-    # return the number of hits and total number of notes to the main game
     if rhythm_game_displayable.has_ended:
-        # use a timer so the player can see the screen before it returns
         timer 2.0 action Return(rhythm_game_displayable.score)
 
-## end screen definition
-
 init python:
-
-    # register channel
-    renpy.music.register_channel(CHANNEL_RHYTHM_GAME)
-
     import os
     import pygame
+    import chparse
+    from configparser import ConfigParser
 
-    # util func
-    def read_beatmap_file(beatmap_path):
-        # read newline separated floats
-        beatmap_path_full = os.path.join(config.gamedir, beatmap_path)
-        with renpy.file(beatmap_path) as f:
-            text = f.read()
-        onset_times = [float(string) for string in text.split('\n') if string != '']
-        return onset_times
+    renpy.music.register_channel(CHANNEL_RHYTHM_GAME)
 
     class Song():
-        def __init__(self, name, audio_path, beatmap_path, beatmap_stride=2):
-            # beatmap_stride (int): Default to 2. Use onset_times[::beatmap_stride] so that the tracks don't get too crowded. Can be used to set difficulty level
-            self.name = name
-            self.audio_path = audio_path
-            self.beatmap_path = beatmap_path
 
-            # can skip onsets to adjust difficulty level
-            # skip every other onset so the display is less dense
-            self.onset_times = read_beatmap_file(beatmap_path)[::beatmap_stride]
+        def __init__(self, path, compensation=0.2):
+            song_config = ConfigParser()
+            song_config.read(os.path.join(path, "song.ini"))
+
+            song_path = os.path.join(path, "song.ogg")
+            if not os.path.isfile(song_path):
+                song_path = os.path.join(path, "guitar.ogg")
+            self.audio_path = os.path.relpath(song_path, config.gamedir)
+
+            self.duration = float(song_config.get("song", "song_length")) / 1000.0
+            name = song_config.get("song", "name")
+            if len(name) > 18:
+                name = name[:15] + "..."
+            self.name = name
+
+            with open(os.path.join(path, "notes.chart")) as f:
+                chart = chparse.load(f)
+
+            sticky = {}
+            self.onset_times = []
+
+            notes = None
+            for difficulty, data in chart.instruments.items():
+                if not data:
+                    continue
+                _notes = data.get(chparse.GUITAR)
+                if _notes:
+                    notes = _notes
+                    break
+
+            for note in notes:
+                for i, item in enumerate(chart.sync_track):
+                    if item.time <= note.time:
+                        if item.kind == chparse.NoteTypes.BPM:
+                            sticky["bpm"] = item.value / 1000
+                        elif item.kind == chparse.NoteTypes.TIME_SIGNATURE:
+                            sticky["time_signature"] = (item.value, 4)
+                wall_time = round((float(note.time) / float(chart.Resolution)) * (60.0 / float(sticky["bpm"])), 3)
+                if isinstance(note, chparse.note.Event):
+                    continue
+                self.onset_times.append((wall_time + compensation, note.fret))
+
             self.max_score = len(self.onset_times) * SCORE_PERFECT
 
         def compute_percent(self, score):
             return round(score / float(self.max_score) * 100)
-    
+
+    class CustomAudioPositionValue(BarValue, DictEquality):
+        def __init__(self, channel='music', update_interval=0.1, duration=None):
+            self.channel = channel
+            self.update_interval = update_interval
+            self.static_duration = duration
+
+            self.adjustment = None
+
+        def get_pos_duration(self):
+            pos = renpy.music.get_pos(self.channel) or 0.0
+            if self.static_duration:
+                return pos, self.static_duration
+
+            duration = renpy.music.get_duration(self.channel) or 1.0
+            return pos, duration
+
+        def get_adjustment(self):
+            pos, duration = self.get_pos_duration()
+            self.adjustment = ui.adjustment(value=pos, range=duration, adjustable=False)
+            return self.adjustment
+
+        def periodic(self, st):
+
+            pos, duration = self.get_pos_duration()
+            self.adjustment.set_range(duration)
+            self.adjustment.change(pos)
+
+            return self.update_interval
+
+
     class RhythmGameDisplayable(renpy.Displayable):
 
         def __init__(self, song):
-            """
-            song (Song object)
-            """
             super(RhythmGameDisplayable, self).__init__()
 
-            self.audio_path = song.audio_path
+            self.song = song
 
             self.has_game_started = False
             self.has_music_started = False # this happens after `self.silence_offset_start`
@@ -235,32 +215,30 @@ init python:
             self.note_speed = config.screen_height / self.note_offset
 
             # number of track bars
-            self.num_track_bars = 4
+            self.num_track_bars = 5
             # drawing position
             self.track_bar_spacing = (config.screen_width - self.x_offset * 2) / (self.num_track_bars - 1)
             # the xoffset of each track bar
             self.track_xoffsets = {
-            track_idx: self.x_offset + track_idx * self.track_bar_spacing
-            for track_idx in range(self.num_track_bars)
+                track_idx: self.x_offset + track_idx * self.track_bar_spacing
+                for track_idx in range(self.num_track_bars)
             }
 
             # define the notes' onset times
-            self.onset_times = song.onset_times
+            self.onset_times = [t for t, _ in song.onset_times]
+
             # assign notes to tracks, same length as self.onset_times
-            # renpy.random.randint is upper-inclusive
-            self.random_track_indices = [
-            renpy.random.randint(0, self.num_track_bars - 1) for _ in range(len(self.onset_times))
-            ]
+            self.random_track_indices = [fret for _, fret in song.onset_times]
 
             # map track_idx to a list of active note timestamps
             self.active_notes_per_track = {
-            track_idx: [] for track_idx in range(self.num_track_bars)
+                track_idx: [] for track_idx in range(self.num_track_bars)
             }
 
             # detect and record score
             # map onset timestamp to whether it has been hit, initialized to False
             self.onset_hits = {
-            onset: None for onset in self.onset_times
+                onset: None for onset in self.onset_times
             }
             self.score = 0
             # if the note is hit within 0.3 seconds of its actual onset time
@@ -278,10 +256,11 @@ init python:
 
             # map pygame key code to track idx
             self.keycode_to_track_idx = {
-            pygame.K_LEFT: 0,
-            pygame.K_UP: 1,
-            pygame.K_DOWN: 2,
-            pygame.K_RIGHT: 3
+                pygame.K_1: 0,
+                pygame.K_2: 1,
+                pygame.K_3: 2,
+                pygame.K_4: 3,
+                pygame.K_5: 4,
             }
 
             # define the drawables
@@ -296,12 +275,14 @@ init python:
             1: Image(IMG_UP),
             2: Image(IMG_DOWN),
             3: Image(IMG_RIGHT),
+            4: Image(IMG_RIGHT),
             }
             self.note_drawables_large = {
             0: Transform(self.note_drawables[0], zoom=self.zoom_scale),
             1: Transform(self.note_drawables[1], zoom=self.zoom_scale),
             2: Transform(self.note_drawables[2], zoom=self.zoom_scale),
             3: Transform(self.note_drawables[3], zoom=self.zoom_scale),
+            4: Transform(self.note_drawables[4], zoom=self.zoom_scale),
             }
 
             # record all the drawables for self.visit
@@ -316,11 +297,13 @@ init python:
             self.drawables.extend(list(self.note_drawables_large.values()))
 
             ## after all intializations are done, start playing music
-            self.play_music()
+            # self.play_music()
+            renpy.music.queue([self.silence_start, self.song.audio_path], channel=CHANNEL_RHYTHM_GAME, loop=False)
+            self.has_game_started = True
 
         def render(self, width, height, st, at):
             """
-            st: A float, the shown timebase, in seconds. 
+            st: A float, the shown timebase, in seconds.
             The shown timebase begins when this displayable is first shown on the screen.
             """
             # cache the first st, when this displayable is first shown on the screen
@@ -332,9 +315,9 @@ init python:
 
             # draw the countdown if we are still in the silent phase before the music starts
             # count down silence_offset_start, 3 seconds, while silence
+            time_before_music = self.countdown - st
             if not self.has_music_started:
                 countdown_text = None
-                time_before_music = self.countdown - st
                 if time_before_music > 2.0:
                     countdown_text = '3'
                 elif time_before_music > 1.0:
@@ -344,10 +327,9 @@ init python:
                 else: # no longer in countdown mode
                     self.has_music_started = True
                     renpy.restart_interaction() # force refresh the screen to display the progress bar
-                    
+
                 if countdown_text is not None:
-                    render.place(Text(countdown_text, color='#fff', size=48),
-                        x=config.screen_width / 2, y=config.screen_height / 2)
+                    render.place(Text(countdown_text, color='#eee', size=48), x=config.screen_width / 2, y=config.screen_height / 2)
 
             # draw the rhythm game if we are playing the music
             # draw the vertical tracks
@@ -365,7 +347,7 @@ init python:
             if self.has_game_started:
                 # self.time_offset cannot be None down here b/c it has been set above
                 # check if the song has ended
-                if renpy.music.get_playing(channel=CHANNEL_RHYTHM_GAME) is None:
+                if time_before_music <= 0 and renpy.music.get_playing(channel=CHANNEL_RHYTHM_GAME) is None:
                     self.has_ended = True
                     renpy.timeout(0) # raise an event
                     return render
@@ -389,7 +371,7 @@ init python:
                             # zoom in on the note if it is within the hit threshold
                             if abs(curr_time - onset) <= self.hit_threshold:
                                 note_drawable = self.note_drawables_large[track_idx]
-                                note_xoffset = x_offset + self.note_xoffset_large 
+                                note_xoffset = x_offset + self.note_xoffset_large
                             else:
                                 note_drawable = self.note_drawables[track_idx]
                                 note_xoffset = x_offset + self.note_xoffset
@@ -400,7 +382,6 @@ init python:
                             note_distance_from_top = note_timestamp * self.note_speed
                             y_offset = self.track_bar_height - note_distance_from_top
                             render.place(note_drawable, x=note_xoffset, y=y_offset)
-
                         elif self.onset_hits[onset] == 'miss':
                             render.place(self.miss_text_drawable, x=x_offset, y=self.track_bar_height + self.hit_text_yoffset)
                         # else show hit text
@@ -453,23 +434,20 @@ init python:
 
                     # perfect
                     if -self.perfect_threshold <= time_delta <= self.perfect_threshold:
-                                            self.onset_hits[onset] = 'perfect'
-                                            self.score += SCORE_PERFECT
-                                            # redraw immediately because now the note should disappear from screen
-                                            renpy.redraw(self, 0)
-                                            # refresh the screen
-                                            renpy.restart_interaction()
-
+                        self.onset_hits[onset] = 'perfect'
+                        self.score += SCORE_PERFECT
+                        # redraw immediately because now the note should disappear from screen
+                        renpy.redraw(self, 0)
+                        # refresh the screen
+                        renpy.restart_interaction()
                     # good
-                    elif (-self.hit_threshold <= time_delta < self.perfect_threshold) or \
-                    (self.perfect_threshold < time_delta <= self.hit_threshold):
+                    elif (-self.hit_threshold <= time_delta < self.perfect_threshold) or (self.perfect_threshold < time_delta <= self.hit_threshold):
                         self.onset_hits[onset] = 'good'
                         self.score += SCORE_GOOD
                         # redraw immediately because now the note should disappear from screen
                         renpy.redraw(self, 0)
                         # refresh the screen
                         renpy.restart_interaction()
-
                     # miss
                     elif (-self.prehit_miss_threshold <= time_delta < -self.hit_threshold):
                         self.onset_hits[onset] = 'miss'
@@ -479,19 +457,11 @@ init python:
                         # refresh the screen
                         renpy.restart_interaction()
 
-
         def visit(self):
             return self.drawables
 
-        def play_music(self):
-            # play slience first, followed by music
-            renpy.music.queue([self.silence_start, self.audio_path], channel=CHANNEL_RHYTHM_GAME, loop=False)
-            self.has_game_started = True
-
         def get_active_notes_per_track(self, current_time):
-            active_notes = {
-            track_idx: [] for track_idx in range(self.num_track_bars)
-            }
+            active_notes = {track_idx: [] for track_idx in range(self.num_track_bars)}
 
             for onset, track_idx in zip(self.onset_times, self.random_track_indices):
                 # determine if this note should appear on the track
