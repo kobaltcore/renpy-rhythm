@@ -102,32 +102,54 @@ init python:
                 name = name[:15] + "..."
             self.name = name
 
+            # chart file reference:
+            # https://docs.google.com/document/d/1v2v0U-9HQ5qHeccpExDOLJ5CMPZZ3QytPmAG5WF0Kzs
             with open(os.path.join(path, "notes.chart")) as f:
                 chart = chparse.load(f)
 
-            sticky = {}
+            self.notes = {}
+
+            expert = chart.instruments[chparse.Difficulties.EXPERT]
+            if expert and expert.get(chparse.Instruments.GUITAR):
+                self.notes["expert"] = expert[chparse.Instruments.GUITAR]
+                self.difficulty = "expert"
+            hard = chart.instruments[chparse.Difficulties.HARD]
+            if hard and hard.get(chparse.Instruments.GUITAR):
+                self.notes["hard"] = hard[chparse.Instruments.GUITAR]
+                self.difficulty = "hard"
+            medium = chart.instruments[chparse.Difficulties.MEDIUM]
+            if medium and medium.get(chparse.Instruments.GUITAR):
+                self.notes["medium"] = medium[chparse.Instruments.GUITAR]
+                self.difficulty = "medium"
+            easy = chart.instruments[chparse.Difficulties.EASY]
+            if easy and easy.get(chparse.Instruments.GUITAR):
+                self.notes["easy"] = easy[chparse.Instruments.GUITAR]
+                self.difficulty = "easy"
+            # na = chart.instruments[chparse.Difficulties.NA]
+            # if na and na.get(chparse.Instruments.GUITAR):
+            #     notes["na"] = na[chparse.Instruments.GUITAR]
+            #     self.difficulty = "na"
+
+            self.difficulty = "expert"
+
+            # extract tempo events from sync track
+            tempo_events = [item for item in chart.sync_track if item.kind == chparse.NoteTypes.BPM]
+
+            tempo = 120.0
+            last_tick = 0.0
+            wall_time = 0.0
+            resolution = float(chart.Resolution)
             self.onset_times = []
-
-            notes = None
-            for difficulty, data in chart.instruments.items():
-                if not data:
-                    continue
-                _notes = data.get(chparse.GUITAR)
-                if _notes:
-                    notes = _notes
-                    break
-
-            for note in notes:
-                for i, item in enumerate(chart.sync_track):
-                    if item.time <= note.time:
-                        if item.kind == chparse.NoteTypes.BPM:
-                            sticky["bpm"] = item.value / 1000
-                        elif item.kind == chparse.NoteTypes.TIME_SIGNATURE:
-                            sticky["time_signature"] = (item.value, 4)
-                wall_time = round((float(note.time) / float(chart.Resolution)) * (60.0 / float(sticky["bpm"])), 3)
+            for note in sorted(list(self.notes[self.difficulty]) + tempo_events, key=lambda n: n.time):
                 if isinstance(note, chparse.note.Event):
                     continue
-                self.onset_times.append((wall_time + compensation, note.fret))
+                delta_ms = (float(note.time) - last_tick) / resolution * 60.0 / tempo
+                wall_time += delta_ms
+                if note.kind == chparse.NoteTypes.NOTE:
+                    self.onset_times.append((wall_time + compensation, note.fret))
+                last_tick = float(note.time)
+                if note.kind == chparse.NoteTypes.BPM:
+                    tempo = float(note.value) / 1000.0
 
             self.max_score = len(self.onset_times) * SCORE_PERFECT
 
@@ -172,7 +194,7 @@ init python:
             self.song = song
 
             self.has_game_started = False
-            self.has_music_started = False # this happens after `self.silence_offset_start`
+            self.has_music_started = False
             self.has_ended = False
             # the first st
             # an offset is necessary because there might be a delay between when the
@@ -180,9 +202,6 @@ init python:
             # seconds, same unit as st, shown time
             self.time_offset = None
 
-            # silence before the music plays, in seconds
-            self.silence_offset_start = 4.5
-            self.silence_start = '<silence %s>' % str(self.silence_offset_start)
             # count down before the music plays, in seconds
             self.countdown = 3.0
 
@@ -271,18 +290,18 @@ init python:
             self.horizontal_bar_drawable = Solid('#fff', xsize=config.screen_width, ysize=self.horizontal_bar_height)
             # map track_idx to the note drawable
             self.note_drawables = {
-            0: Image(IMG_LEFT),
-            1: Image(IMG_UP),
-            2: Image(IMG_DOWN),
-            3: Image(IMG_RIGHT),
-            4: Image(IMG_RIGHT),
+                0: Image(IMG_LEFT),
+                1: Image(IMG_UP),
+                2: Image(IMG_DOWN),
+                3: Image(IMG_RIGHT),
+                4: Image(IMG_RIGHT),
             }
             self.note_drawables_large = {
-            0: Transform(self.note_drawables[0], zoom=self.zoom_scale),
-            1: Transform(self.note_drawables[1], zoom=self.zoom_scale),
-            2: Transform(self.note_drawables[2], zoom=self.zoom_scale),
-            3: Transform(self.note_drawables[3], zoom=self.zoom_scale),
-            4: Transform(self.note_drawables[4], zoom=self.zoom_scale),
+                0: Transform(self.note_drawables[0], zoom=self.zoom_scale),
+                1: Transform(self.note_drawables[1], zoom=self.zoom_scale),
+                2: Transform(self.note_drawables[2], zoom=self.zoom_scale),
+                3: Transform(self.note_drawables[3], zoom=self.zoom_scale),
+                4: Transform(self.note_drawables[4], zoom=self.zoom_scale),
             }
 
             # record all the drawables for self.visit
@@ -298,7 +317,7 @@ init python:
 
             ## after all intializations are done, start playing music
             # self.play_music()
-            renpy.music.queue([self.silence_start, self.song.audio_path], channel=CHANNEL_RHYTHM_GAME, loop=False)
+            renpy.music.queue([self.song.audio_path], channel=CHANNEL_RHYTHM_GAME, loop=False)
             self.has_game_started = True
 
         def render(self, width, height, st, at):
@@ -309,27 +328,27 @@ init python:
             # cache the first st, when this displayable is first shown on the screen
             # this allows us to compute subsequent times when the notes should appear
             if self.has_game_started and self.time_offset is None:
-                self.time_offset = self.silence_offset_start + st
+                self.time_offset = st
 
             render = renpy.Render(width, height)
 
             # draw the countdown if we are still in the silent phase before the music starts
             # count down silence_offset_start, 3 seconds, while silence
-            time_before_music = self.countdown - st
-            if not self.has_music_started:
-                countdown_text = None
-                if time_before_music > 2.0:
-                    countdown_text = '3'
-                elif time_before_music > 1.0:
-                    countdown_text = '2'
-                elif time_before_music > 0.0:
-                    countdown_text = '1'
-                else: # no longer in countdown mode
-                    self.has_music_started = True
-                    renpy.restart_interaction() # force refresh the screen to display the progress bar
+            # time_before_music = self.countdown - st
+            # if not self.has_music_started:
+            #     countdown_text = None
+            #     if time_before_music > 2.0:
+            #         countdown_text = '3'
+            #     elif time_before_music > 1.0:
+            #         countdown_text = '2'
+            #     elif time_before_music > 0.0:
+            #         countdown_text = '1'
+            #     else: # no longer in countdown mode
+            #         self.has_music_started = True
+            #         renpy.restart_interaction() # force refresh the screen to display the progress bar
 
-                if countdown_text is not None:
-                    render.place(Text(countdown_text, color='#eee', size=48), x=config.screen_width / 2, y=config.screen_height / 2)
+            #     if countdown_text is not None:
+            #         render.place(Text(countdown_text, color='#eee', size=48), x=config.screen_width / 2, y=config.screen_height / 2)
 
             # draw the rhythm game if we are playing the music
             # draw the vertical tracks
@@ -347,14 +366,15 @@ init python:
             if self.has_game_started:
                 # self.time_offset cannot be None down here b/c it has been set above
                 # check if the song has ended
-                if time_before_music <= 0 and renpy.music.get_playing(channel=CHANNEL_RHYTHM_GAME) is None:
-                    self.has_ended = True
-                    renpy.timeout(0) # raise an event
-                    return render
+                # if renpy.music.get_playing(channel=CHANNEL_RHYTHM_GAME) is None:
+                #     self.has_ended = True
+                #     renpy.timeout(0) # raise an event
+                #     return render
 
                 # the number of seconds the song has been playing
                 # is the difference between the current shown time and the cached first st
-                curr_time = st - self.time_offset
+                # curr_time = st - self.time_offset
+                curr_time = st
 
                 # update self.active_notes_per_track
                 self.active_notes_per_track = self.get_active_notes_per_track(curr_time)
