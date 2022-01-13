@@ -51,7 +51,10 @@ screen rhythm_game(rhythm_game_displayable):
     key 'K_4' action NullAction()
     key 'K_5' action NullAction()
 
-    add Solid('#000')
+    if rhythm_game_displayable.song.video:
+        add rhythm_game_displayable.song.video
+    else:
+        add "#000"
     add rhythm_game_displayable
 
     vbox:
@@ -81,6 +84,9 @@ init python:
     import chparse
     from configparser import ConfigParser
 
+    _preferences.volumes['voice'] = 0.0
+
+    renpy.music.register_channel("silent", "voice", movie=True)
     renpy.music.register_channel(CHANNEL_RHYTHM_GAME)
 
     class Song():
@@ -95,12 +101,21 @@ init python:
             if not os.path.isfile(song_path):
                 song_path = os.path.join(path, "guitar.ogg")
             self.audio = os.path.relpath(song_path, config.gamedir)
+            try:
+                self.video_start_time = abs(float(song_config.get("song", "video_start_time")) / 1000.0)
+            except:
+                self.video_start_time = 0.0
+
+            def play_callback(old, new):
+                renpy.music.play(new._play, channel=new.channel, loop=new.loop, synchro_start=True)
+                if new.mask:
+                    renpy.music.play(new.mask, channel=new.mask_channel, loop=new.loop, synchro_start=True)
 
             # find optional video
             self.video = None
-            video_path = os.path.join(path, "video.mp4")
+            video_path = os.path.join(path, "video.webm")
             if os.path.isfile(video_path):
-                self.video_path = os.path.relpath(video_path, config.gamedir)
+                self.video = Movie(play=os.path.relpath(video_path, config.gamedir), channel="silent", play_callback=play_callback)
 
             # get name and song duration
             self.name = song_config.get("song", "name")
