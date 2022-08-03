@@ -52,6 +52,7 @@ screen rhythm_game(rhythm_game_displayable):
     key 'K_5' action NullAction()
 
     if rhythm_game_displayable.song.video:
+        add "#000"
         add rhythm_game_displayable.song.video
     else:
         add "#000"
@@ -100,6 +101,10 @@ init python:
             song_path = os.path.join(path, "song.ogg")
             if not os.path.isfile(song_path):
                 song_path = os.path.join(path, "guitar.ogg")
+            if not os.path.isfile(song_path):
+                song_path = os.path.join(path, "song.mp3")
+            if not os.path.isfile(song_path):
+                song_path = os.path.join(path, "guitar.mp3")
             self.audio = os.path.relpath(song_path, config.gamedir)
             try:
                 self.video_start_time = abs(float(song_config.get("song", "video_start_time")) / 1000.0)
@@ -116,6 +121,10 @@ init python:
             video_path = os.path.join(path, "video.webm")
             if os.path.isfile(video_path):
                 self.video = Movie(play=os.path.relpath(video_path, config.gamedir), channel="silent", play_callback=play_callback)
+            else:
+                video_path = os.path.join(path, "video.mp4")
+                if os.path.isfile(video_path):
+                    self.video = Movie(play=os.path.relpath(video_path, config.gamedir), channel="silent", play_callback=play_callback)
 
             # get name and song duration
             self.name = song_config.get("song", "name")
@@ -151,6 +160,8 @@ init python:
             # if na and na.get(chparse.Instruments.GUITAR):
             #     notes["na"] = na[chparse.Instruments.GUITAR]
             #     self.difficulty = "na"
+
+            self.difficulty = "expert"
 
             # extract tempo events from sync track
             tempo_events = [item for item in chart.sync_track if item.kind == chparse.NoteTypes.BPM]
