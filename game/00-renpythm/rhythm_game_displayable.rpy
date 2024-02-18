@@ -41,10 +41,9 @@ screen select_song_screen(songs):
                 action Return(None)
 
 screen rhythm_game(rhythm_game_displayable):
-    zorder 100
-
     zorder 100 # always on top, covering textbox, quick_menu
     # disable key handling for game keys
+
     key 'K_1' action NullAction()
     key 'K_2' action NullAction()
     key 'K_3' action NullAction()
