@@ -22,12 +22,14 @@ def load(fileobj):
     chart = None
     line = True
     while line:
-        line = fileobj.readline()
-        line = line.strip().strip("\xef\xbb\xbf")
+        line = fileobj.readline().strip().strip("\ufeff")
         if not line:
             break
         if line.startswith("["):
-            inst = _parse_raw_inst(fileobj, line)
+            try:
+                inst = _parse_raw_inst(fileobj, line)
+            except Exception as exc:
+                raise ParseError(str(exc))
             if isinstance(inst, dict):  # metadata arrived
                 chart = Chart(inst)
                 for i in instruments:
@@ -36,7 +38,6 @@ def load(fileobj):
                 instruments.append(inst)
             else:
                 chart.add_instrument(inst)
-
     return chart
 
 
@@ -45,7 +46,6 @@ def _parse_raw_inst(fileobj, first_line):
         raw_name = flags.Instruments(re.match(r"\[([a-zA-Z]+)\]", first_line).group(1))
     except ValueError:
         return _parse_inst(fileobj, first_line)
-    print(raw_name, flags.METADATA)
     if raw_name == flags.METADATA:
         line = ""
         data = {}

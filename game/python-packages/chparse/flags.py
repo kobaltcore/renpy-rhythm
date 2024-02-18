@@ -1,5 +1,5 @@
 """Enum constants for the package."""
-from enum import Enum
+from enum import Enum, IntFlag
 
 
 class NoteTypes(Enum):
@@ -20,7 +20,7 @@ TIME_SIGNATURE = NoteTypes.TIME_SIGNATURE
 BPM = NoteTypes.BPM
 
 
-class Flags(Enum):
+class Flags(IntFlag):
     """Possible Note flags."""
 
     FORCED = 5

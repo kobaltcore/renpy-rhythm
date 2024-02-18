@@ -10,7 +10,7 @@ class Instrument(list):
     kind = flags.GUITAR
 
     def __init__(self, kind=None, difficulty=None, notes=None):
-        super(Instrument, self).__init__()
+        super(__class__, self).__init__()
         if kind is not None:
             if not isinstance(kind, flags.Instruments):
                 raise TypeError(
@@ -31,7 +31,7 @@ class Instrument(list):
             except TypeError:
                 raise TypeError(
                     "expected iterable notes list, got " + type(notes).__name__
-                )
+                ) from None
 
     def __repr__(self):
         first_notes = list(self[:5])
@@ -66,7 +66,7 @@ class Instrument(list):
 
     def append(self, note, kind=()):
         self._check_note(note, kind)
-        super(Instrument, self).append(note)
+        super(__class__, self).append(note)
 
     def add(self, note, kind=()):
         """Add a note to this track.
