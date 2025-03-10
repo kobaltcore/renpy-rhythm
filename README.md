@@ -1,5 +1,16 @@
 # Ren'Py Rhythm: A Rhythm Game Engine for Ren'Py
 
+> [!CAUTION]
+> This is a fork of the original repo with many changes and (arguably) improvements. See below for details.
+
+This is a revamp of the original work by Lynn Zheng. It contains the following major changes:
+- Support for unmodified Clone Hero charts (i.e. [Chorus](https://www.enchor.us))
+- Timing improvements for a much tighter playing experience
+- Cleanup and improvement of UI
+- Several bug-fixes for critical scoring and timing issues
+
+# Original README
+
 **Play it now on [itch.io](https://r3dhummingbird.itch.io/renpy-rhythm-game) or watch a demo on [YouTube](https://youtu.be/7fMig9BmDzY)**
 
 ## About
@@ -104,7 +115,7 @@ If you are looking for ways to implement different difficulty levels. The follow
 - The `beatmap_stride` passed to the constructor of `RhythmGameDisplayable`. This must be a non-negative integer and defaults to 2. A smaller `beatmap_stride` like 1 will result in drastically more notes appearing on the screen, increasing the game's difficulty.
 
 ## Continuous Development and Contribution
-The project is under active maintenance and development. Please feel free to submit a GitHub issue for bugs and feature requests. Please also feel free to contribute by submitting GitHub issues and PRs. 
+The project is under active maintenance and development. Please feel free to submit a GitHub issue for bugs and feature requests. Please also feel free to contribute by submitting GitHub issues and PRs.
 
 ## Music File Credit
 
