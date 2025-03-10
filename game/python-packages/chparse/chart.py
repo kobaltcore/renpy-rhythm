@@ -2,16 +2,14 @@
 from .instrument import Instrument
 from . import flags
 
-
 class Chart:
     """Represents an entire chart."""
-
     instruments = {
         flags.EXPERT: {},
         flags.HARD: {},
         flags.MEDIUM: {},
         flags.EASY: {},
-        flags.NA: {},
+        flags.NA: {}
     }
 
     @property
@@ -37,7 +35,9 @@ class Chart:
     @staticmethod
     def _check_type(obj, cls):
         if not isinstance(obj, cls):
-            raise TypeError("Expected {.__name__} but got {.__name__}".format(cls, obj))
+            raise TypeError('Expected {.__name__} but got {.__name__}'.format(
+                cls, obj
+            ))
 
     def add_instrument(self, inst):
         """Add an Instrument to the Chart."""
@@ -51,22 +51,22 @@ class Chart:
 
     def dump(self, fileobj):
         """Dump the Chart to a file (or object with a write() method)."""
-        fileobj.write("[" + flags.METADATA.value + "]\n")
-        fileobj.write("{\n")
+        fileobj.write('[' + flags.METADATA.value + ']\n')
+        fileobj.write('{\n')
         for key, value in self.__dict__.items():
-            if key.startswith("_"):
+            if key.startswith('_'):
                 continue
-            fileobj.write(
-                "  {} = {}\n".format(
-                    key, (('"' + value + '"') if isinstance(value, str) else value)
-                )
-            )
-        fileobj.write("}\n\n")
+            fileobj.write('  {} = {}\n'.format(
+                key, (('"' + value + '"')
+                      if isinstance(value, str)
+                      else value)
+            ))
+        fileobj.write('}\n\n')
         for inst in self.instruments[flags.NA].values():
-            fileobj.write(str(inst) + "\n\n")
+            fileobj.write(str(inst) + '\n\n')
 
         for dif, diffic in self.instruments.items():
             if dif == flags.NA:
-                continue  # already done
+                continue #already done
             for inst in diffic.values():
-                fileobj.write(str(inst) + "\n\n")
+                fileobj.write(str(inst) + '\n\n')

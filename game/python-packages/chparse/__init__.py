@@ -28,6 +28,6 @@ Assuming your .chart file is named "notes.chart"...
     <Note: 0 = N 3 0 (<Flags.NONE: 0>)>
 """
 from .parse import load, dump
-from .flags import *  # pylint: disable=wildcard-import
+from .flags import * #pylint: disable=wildcard-import
 
 __version__ = "0.0.3"
